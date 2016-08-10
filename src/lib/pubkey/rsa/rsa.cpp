@@ -95,13 +95,43 @@ class RSA_Private_Operation
 
       BigInt private_op(const BigInt& m) const
          {
-         auto future_j1 = std::async(std::launch::async, m_powermod_d1_p, m);
+#if 1
+	 auto future_j1 = std::async(std::launch::async, m_powermod_d1_p, m);
          BigInt j2 = m_powermod_d2_q(m);
          BigInt j1 = future_j1.get();
-
          j1 = m_mod_p.reduce(sub_mul(j1, j2, m_c));
-
          return mul_add(j1, m_q, j2);
+#elif 0
+
+//         BigInt j1 = m_powermod_d1_p(m);
+        // BigInt j2 = m_powermod_d2_q(m);
+       BigInt j[2];
+       BOTAN_PARALLEL_FOR(size_t i = 0; i < 2; ++i)
+          {
+          if(i == 0) j[i] = m_powermod_d1_p(m);
+	  else       j[i] = m_powermod_d2_q(m);
+          }		  
+
+      j[0] = m_mod_p.reduce(sub_mul(j[0], j[1], m_c));
+
+      return mul_add(j[0], m_q, j[1]);
+#else
+
+	 BigInt j1, j2;
+#pragma omp parallel sections
+	 {
+#pragma omp section
+	 {
+         j1 = m_powermod_d1_p(m);
+	 }
+#pragma omp section
+	 {
+         j2 = m_powermod_d2_q(m);
+	 }
+	 }
+         j1 = m_mod_p.reduce(sub_mul(j1, j2, m_c));
+         return mul_add(j1, m_q, j2);
+#endif
          }
 
       const BigInt& m_n;
